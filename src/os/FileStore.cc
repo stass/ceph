@@ -3977,8 +3977,21 @@ int FileStore::_destroy_collection(coll_t c)
   get_cdir(c, fn, sizeof(fn));
   dout(15) << "_destroy_collection " << fn << dendl;
   int r = ::rmdir(fn);
-  if (r < 0) r = -errno;
+  if (r < 0)
+    r = -errno;
   dout(10) << "_destroy_collection " << fn << " = " << r << dendl;
+  if (r == -ENOTEMPTY) {
+    // sigh.. clean it up manually?
+    if (g_conf->filestore_cleanup_rmdir_notempty) {
+      derr << " removing files for rmdir on non-empty collection " << fn << dendl;
+      vector<sobject_t> ls;
+      collection_list(c, ls);
+      for (vector<sobject_t>::iterator p = ls.begin(); p != ls.end(); ++p)
+	_collection_remove(c, *p);
+      r = ::rmdir(fn);
+      assert(r == 0);   // better work this time!
+    }
+  }
   return r;
 }
 

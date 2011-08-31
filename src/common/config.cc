@@ -380,6 +380,7 @@ struct config_option config_optionsp[] = {
   OPTION(osd_rollback_to_cluster_snap, OPT_STR, 0),
   OPTION(osd_max_notify_timeout, OPT_U32, 30), // max notify timeout in seconds
   OPTION(filestore, OPT_BOOL, false),
+  OPTION(filestore_cleanup_rmdir_notempty, OPT_BOOL, false),
   OPTION(filestore_max_sync_interval, OPT_DOUBLE, 5),    // seconds
   OPTION(filestore_min_sync_interval, OPT_DOUBLE, .01),  // seconds
   OPTION(filestore_fake_attrs, OPT_BOOL, false),

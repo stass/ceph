@@ -509,6 +509,7 @@ public:
 
   // filestore
   bool filestore;
+  bool filestore_cleanup_rmdir_notempty;
   double   filestore_max_sync_interval;
   double   filestore_min_sync_interval;
   bool  filestore_fake_attrs;
