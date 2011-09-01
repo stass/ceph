@@ -2577,7 +2577,7 @@ bool librados::ObjectIterator::operator!=(const librados::ObjectIterator& rhs) c
   return (ctx.get() != rhs.ctx.get());
 }
 
-const std::string& librados::ObjectIterator::operator*() const {
+const pair<std::string, std::string>& librados::ObjectIterator::operator*() const {
   return cur_obj;
 }
 
@@ -2596,8 +2596,8 @@ librados::ObjectIterator librados::ObjectIterator::operator++(int)
 
 void librados::ObjectIterator::get_next()
 {
-  const char *entry;
-  int ret = rados_objects_list_next(ctx.get(), &entry);
+  const char *entry, *key;
+  int ret = rados_objects_list_next(ctx.get(), &entry, &key);
   if (ret == -ENOENT) {
     ctx.reset();
     *this = __EndObjectIterator;
@@ -2609,7 +2609,7 @@ void librados::ObjectIterator::get_next()
     throw std::runtime_error(oss.str());
   }
 
-  cur_obj = entry;
+  cur_obj = make_pair(entry, key ? key : string());
 }
 
 const librados::ObjectIterator librados::ObjectIterator::__EndObjectIterator(NULL);
@@ -3960,7 +3960,7 @@ extern "C" void rados_objects_list_close(rados_list_ctx_t h)
   delete lh;
 }
 
-extern "C" int rados_objects_list_next(rados_list_ctx_t listctx, const char **entry)
+extern "C" int rados_objects_list_next(rados_list_ctx_t listctx, const char **entry, const char **key)
 {
   librados::ObjListCtx *lh = (librados::ObjListCtx *)listctx;
   Objecter::ListContext *h = lh->lc;
@@ -3977,7 +3977,14 @@ extern "C" int rados_objects_list_next(rados_list_ctx_t listctx, const char **en
       return -ENOENT;
   }
 
-  *entry = h->list.front().name.c_str();
+  *entry = h->list.front().first.name.c_str();
+
+  if (key) {
+    if (h->list.front().second.size())
+      *key = h->list.front().second.c_str();
+    else
+      *key = NULL;
+  }
   return 0;
 }
 
