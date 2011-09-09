@@ -274,6 +274,7 @@ int FileStore::lfn_open(coll_t cid, const hobject_t& oid, int flags, mode_t mode
   if (r < 0) {
     return r;
   }
+  dout(20) << "oid " << oid << " at path " << path->path() << dendl;
 
   r = ::open(path->path(), flags, mode);
   if (r < 0)
