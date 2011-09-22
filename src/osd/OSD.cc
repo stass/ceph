@@ -16,6 +16,7 @@
 #include "osd/PG.h"
 
 #include "include/types.h"
+#include "include/compat.h"
 
 #include "OSD.h"
 #include "OSDMap.h"
@@ -95,10 +96,10 @@
 #include <signal.h>
 #include <boost/scoped_ptr.hpp>
 
-#ifdef DARWIN
+#if defined(DARWIN) || defined(__FreeBSD__)
 #include <sys/param.h>
 #include <sys/mount.h>
-#endif // DARWIN
+#endif // DARWIN || __FreeBSD__
 
 #include "objclass/objclass.h"
 
