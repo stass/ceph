@@ -71,9 +71,7 @@
 using ceph::crypto::SHA1;
 
 #ifndef __CYGWIN__
-# if !defined(DARWIN) && !defined(__FreeBSD__)
 #  include "btrfs_ioctl.h"
-# endif
 #endif
 
 #include "common/config.h"
@@ -880,8 +878,8 @@ int FileStore::mkfs()
   char buf[PATH_MAX];
   DIR *dir;
   struct dirent *de;
-  int basedir_fd;
 #if defined(__linux__)
+  int basedir_fd;
   struct btrfs_ioctl_vol_args volargs;
 #endif
 
@@ -991,9 +989,9 @@ int FileStore::mkfs()
       // not fatal
     }
     else if (ret == EOPNOTSUPP || ret == ENOTTY) {
-#endif
       dout(2) << " BTRFS_IOC_SUBVOL_CREATE ioctl failed, trying mkdir "
 	      << current_fn << dendl;
+#endif
       if (::mkdir(current_fn.c_str(), 0755)) {
 	ret = errno;
 	if (ret != EEXIST) {
@@ -1037,7 +1035,9 @@ int FileStore::mkfs()
   ret = 0;
 
 close_basedir_fd:
+#if defined(__linux__)
   TEMP_FAILURE_RETRY(::close(basedir_fd));
+#endif
 close_dir:
   ::closedir(dir);
 close_fsid_fd:
@@ -1564,7 +1564,6 @@ int FileStore::mount()
     goto close_basedir_fd;
   }
 
-#if defined(__linux__)
   if (btrfs && m_filestore_btrfs_snap) {
     if (snaps.empty()) {
       dout(0) << "mount WARNING: no consistent snaps found, store may be in inconsistent state" << dendl;
@@ -1659,7 +1658,6 @@ int FileStore::mount()
       TEMP_FAILURE_RETRY(::close(vol_args.fd));
     }
   }
-#endif
   initial_op_seq = 0;
 
   current_fd = ::open(current_fn.c_str(), O_RDONLY);
@@ -2181,9 +2179,6 @@ unsigned FileStore::apply_transactions(list<Transaction*> &tls,
 
 int FileStore::_transaction_start(uint64_t bytes, uint64_t ops)
 {
-#if defined(DARWIN) || defined(__FreeBSD__)
-  return 0;
-#else
   if (!btrfs || !btrfs_trans_start_end ||
       !m_filestore_btrfs_trans)
     return 0;
@@ -2210,14 +2205,10 @@ int FileStore::_transaction_start(uint64_t bytes, uint64_t ops)
   ::mknod(fn, 0644, 0);
 
   return fd;
-#endif /* DARWIN || __FreeBSD__ */
 }
 
 void FileStore::_transaction_finish(int fd)
 {
-#if defined(DARWIN) || defined(__FreeBSD__)
-  return;
-#else
   if (!btrfs || !btrfs_trans_start_end ||
       !m_filestore_btrfs_trans)
     return;
@@ -2229,7 +2220,6 @@ void FileStore::_transaction_finish(int fd)
   dout(10) << "transaction_finish " << fd << dendl;
   ::ioctl(fd, BTRFS_IOC_TRANS_END);
   ::close(fd);
-#endif /* DARWIN || __FreeBSD__ */
 }
 
 unsigned FileStore::_do_transaction(Transaction& t)
@@ -2733,11 +2723,7 @@ int FileStore::_clone(coll_t cid, const hobject_t& oldoid, const hobject_t& newo
     goto out;
   }
   if (btrfs)
-#if !defined(DARWIN) && !defined(__FreeBSD__)
     r = ::ioctl(n, BTRFS_IOC_CLONE, o);
-#else 
-  ;
-#endif /* DARWIN || __FreeBSD__ */
   else {
     struct stat st;
     ::fstat(o, &st);
@@ -2794,7 +2780,6 @@ int FileStore::_do_clone_range(int from, int to, uint64_t srcoff, uint64_t len, 
   
   dout(20) << "_do_clone_range cloning " << srcoffclone << "~" << lenclone 
 	   << " to " << dstoffclone << " = " << r << dendl;
-#if defined(__linux__)
   btrfs_ioctl_clone_range_args a;
   a.src_fd = from;
   a.src_offset = srcoffclone;
@@ -2804,15 +2789,12 @@ int FileStore::_do_clone_range(int from, int to, uint64_t srcoff, uint64_t len, 
   if (err >= 0) {
     r += err;
   } else if (errno == EINVAL) {
-#endif
     // Still failed, might be compressed
     dout(20) << "_do_clone_range failed CLONE_RANGE call with -EINVAL, using copy" << dendl;
     return _do_copy_range(from, to, srcoff, len, dstoff);
-#if defined(__linux__)
   } else {
     return -errno;
   }
-#endif
 
   // Take care any trimmed from front
   if (srcoffclone != srcoff) {
@@ -3069,7 +3051,6 @@ void FileStore::sync_entry()
 	assert(0);
       }
 
-#if defined(__linux__)
       bool do_snap = btrfs && m_filestore_btrfs_snap;
 
       if (do_snap) {
@@ -3119,17 +3100,14 @@ void FileStore::sync_entry()
 	  commit_started();
 	}
       } else
-#endif
       {
 	commit_started();
 
-#if defined(__linux__)
 	if (btrfs) {
 	  dout(15) << "sync_entry doing btrfs SYNC" << dendl;
 	  // do a full btrfs commit
 	  ::ioctl(op_fd, BTRFS_IOC_SYNC);
 	} else
-#endif
         if (m_filestore_fsync_flushes_journal_data) {
 	  dout(15) << "sync_entry doing fsync on " << current_op_seq_fn << dendl;
 	  // make the file system's journal commit.
@@ -3155,7 +3133,6 @@ void FileStore::sync_entry()
       logger->set(l_os_committing, 0);
 
       // remove old snaps?
-#if defined(__linux__)
       if (do_snap) {
 	while (snaps.size() > 2) {
 	  btrfs_ioctl_vol_args vol_args;
@@ -3173,7 +3150,6 @@ void FileStore::sync_entry()
 	  }
 	}
       }
-#endif
 
       dout(15) << "sync_entry committed to op_seq " << cp << dendl;
 
@@ -3292,11 +3268,6 @@ int FileStore::snapshot(const string& name)
   dout(10) << "snapshot " << name << dendl;
   sync_and_flush();
 
-#if !defined(__linux__)
-  dout(0) << "snapshot " << name << " failed, no btrfs" << dendl;
-  return -EOPNOTSUPP;
-#else
-  
   if (!btrfs) {
     dout(0) << "snapshot " << name << " failed, no btrfs" << dendl;
     return -EOPNOTSUPP;
@@ -3311,7 +3282,6 @@ int FileStore::snapshot(const string& name)
     derr << "snapshot " << name << " failed: " << cpp_strerror(r) << dendl;
 
   return r;
-#endif
 }
 
 // -------------------------------
