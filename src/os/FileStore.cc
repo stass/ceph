@@ -3236,7 +3236,7 @@ int FileStore::_getattr(coll_t cid, const hobject_t& oid, const char *name, buff
     memcpy(bp.c_str(), val, l);
   } else if (l == -ERANGE) {
     l = lfn_getxattr(cid, oid, name, 0, 0);
-    if (l) {
+    if (l > 0) {
       bp = buffer::create(l);
       l = lfn_getxattr(cid, oid, name, bp.c_str(), l);
     }
@@ -3253,7 +3253,7 @@ int FileStore::_getattr(const char *fn, const char *name, bufferptr& bp)
     memcpy(bp.c_str(), val, l);
   } else if (l == -ERANGE) {
     l = do_getxattr(fn, name, 0, 0);
-    if (l) {
+    if (l > 0) {
       bp = buffer::create(l);
       l = do_getxattr(fn, name, bp.c_str(), l);
     }
